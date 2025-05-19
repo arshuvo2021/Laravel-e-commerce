@@ -1,18 +1,22 @@
 <?php
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Category extends Model
 {
+    use HasFactory;
+
     protected $guarded = [];
 
-    // Circular dependency
+    public function products()
+    {
+        return $this->hasMany(Product::class);
+    }
+
     public function featuredProducts()
     {
-        return $this->products()
-            ->where('price', '>', 100)
-            ->expensive(); // Uses Product's scope
+        return $this->products()->expensive(); // Using Product's scope
     }
 }
