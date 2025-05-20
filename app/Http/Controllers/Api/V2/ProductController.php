@@ -2,20 +2,18 @@
 
 namespace App\Http\Controllers\Api\V2;
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Response;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Response;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class ProductController extends Controller
 {
     public function index()
     {
-        $query = Product::with('category')->select('id', 'name', 'price', 'in_stock', 'category_id');
-
+        $query = Product::with('category')->select('id', 'name', 'price', 'in_stock', 'category_id', 'description');
         $this->applyFilters($query);
-
         $products = $query->paginate(15);
 
         return response()->json([
@@ -27,7 +25,8 @@ class ProductController extends Controller
                     'name' => $product->name,
                     'price' => $product->price,
                     'category' => optional($product->category)->name,
-                    'in_stock' => $product->in_stock > 0,
+                    'in_stock' => (bool)$product->in_stock,
+                    'description' => $product->description,
                 ];
             }),
             'pagination' => [
@@ -40,12 +39,12 @@ class ProductController extends Controller
 
     private function applyFilters($query)
     {
-        if ($category = request('category_id')) {
-            $query->where('category_id', $category);
+        if (request()->filled('category_id')) {
+            $query->where('category_id', request('category_id'));
         }
 
-        if ($minPrice = request('min_price')) {
-            $query->where('price', '>=', $minPrice);
+        if (request()->filled('min_price')) {
+            $query->where('price', '>=', request('min_price'));
         }
 
         if ($sort = request('sort')) {
@@ -57,7 +56,7 @@ class ProductController extends Controller
 
     public function exportCsv()
     {
-        $query = Product::with('category')->select('id', 'name', 'price', 'in_stock', 'category_id');
+        $query = Product::with('category')->select('id', 'name', 'price', 'in_stock', 'category_id', 'description');
         $this->applyFilters($query);
         $products = $query->get();
 
@@ -68,7 +67,7 @@ class ProductController extends Controller
 
         $callback = function () use ($products) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['ID', 'Name', 'Price', 'Category', 'In Stock']);
+            fputcsv($handle, ['ID', 'Name', 'Price', 'Category', 'In Stock', 'Description']);
 
             foreach ($products as $product) {
                 fputcsv($handle, [
@@ -77,6 +76,7 @@ class ProductController extends Controller
                     $product->price,
                     optional($product->category)->name,
                     $product->in_stock ? 'Yes' : 'No',
+                    $product->description,
                 ]);
             }
 
@@ -88,7 +88,7 @@ class ProductController extends Controller
 
     public function exportPdf()
     {
-        $query = Product::with('category')->select('id', 'name', 'price', 'in_stock', 'category_id');
+        $query = Product::with('category')->select('id', 'name', 'price', 'in_stock', 'category_id', 'description');
         $this->applyFilters($query);
         $products = $query->get();
 
@@ -103,7 +103,9 @@ class ProductController extends Controller
             'name' => 'required|string|max:255',
             'price' => 'required|numeric|min:0',
             'in_stock' => 'required|boolean',
+            'stock' => 'required|integer|min:0',
             'category_id' => 'required|exists:categories,id',
+            'description' => 'nullable|string',
         ]);
 
         $product = Product::create($validated);
@@ -119,13 +121,14 @@ class ProductController extends Controller
         $product = Product::with('category')->findOrFail($id);
 
         return response()->json([
-            'success' => true,
+            'status' => 'success', // Changed from 'success' => true for consistency
             'data' => [
                 'id' => $product->id,
                 'name' => $product->name,
                 'price' => $product->price,
-                'in_stock' => $product->in_stock > 0,
+                'in_stock' => (bool)$product->in_stock,
                 'category' => optional($product->category)->name,
+                'description' => $product->description,
             ],
         ]);
     }
@@ -136,15 +139,17 @@ class ProductController extends Controller
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
+            'description' => 'nullable|string',
             'price' => 'sometimes|numeric|min:0',
             'in_stock' => 'sometimes|boolean',
+            'stock' => 'sometimes|integer|min:0',
             'category_id' => 'sometimes|exists:categories,id',
         ]);
 
         $product->update($validated);
 
         return response()->json([
-            'success' => true,
+            'status' => 'success',
             'message' => 'Product updated successfully',
             'data' => $product,
         ]);
@@ -156,7 +161,7 @@ class ProductController extends Controller
         $product->delete();
 
         return response()->json([
-            'success' => true,
+            'status' => 'success', // Changed for consistency
             'message' => 'Product deleted successfully',
         ]);
     }
