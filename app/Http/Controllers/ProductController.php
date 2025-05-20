@@ -91,7 +91,8 @@ class ProductController extends Controller
         $expensiveOnly = $request->has('expensive_only');
     
         $products = Product::with('category')
-            ->where(function ($q) use ($query) {
+            ->where(function (
+                $q) use ($query) {
                 $q->where('name', 'like', "%{$query}%")
                   ->orWhereHas('category', function ($q2) use ($query) {
                       $q2->where('name', 'like', "%{$query}%");
@@ -104,7 +105,8 @@ class ProductController extends Controller
     
         $products = $products->paginate(20);
     
-        return view('product.index', compact('products'));
+        // Return the correct admin view
+        return view('admin.products.index', compact('products'));
     }
 
     // Update stock status of a product (via POST)

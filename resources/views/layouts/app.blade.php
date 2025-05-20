@@ -73,8 +73,8 @@
                     <!-- Left Side Of Navbar -->
                     <ul class="navbar-nav me-auto">
                         <li class="nav-item">
-                            <a class="nav-link" href="{{ url('/') }}">
-                                <i class="fas fa-home me-1"></i> Dashboard/Home
+                            <a class="nav-link" href="{{ route('admin.products.index') }}">
+                                <i class="fas fa-home me-1"></i> Home
                             </a>
                         </li>
                         <li class="nav-item dropdown">
@@ -112,13 +112,13 @@
                         <input
                             class="form-control search-input"
                             type="search"
-                            name="q"
+                            name="query"
                             placeholder="Search..."
                             aria-label="Search"
                             required
                         />
                         <button class="btn btn-outline-primary ms-2" type="submit">
-                            <i class="fas fa-search"></i>
+                            <i class="fas fa-search">GO</i>
                         </button>
                     </form>
 

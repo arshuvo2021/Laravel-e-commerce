@@ -15,8 +15,8 @@ Auth::routes();
 
 // All admin routes protected
 Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
-    Route::resource('products', ProductController::class);
     Route::get('products/search', [ProductController::class, 'search'])->name('products.search');
+    Route::resource('products', ProductController::class)->except(['show']);
     Route::post('products/{id}/stock', [ProductController::class, 'updateStock'])->name('products.stock');
 });
 
