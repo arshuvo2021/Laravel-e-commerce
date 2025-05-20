@@ -29,6 +29,7 @@ class ProductController extends Controller
             'price' => 'required|numeric|min:0',
             'in_stock' => 'required|boolean',
             'category_id' => 'required|exists:categories,id',
+            'stock' => 'required|integer|min:0',
         ]);
 
         $product = Product::create($validated);

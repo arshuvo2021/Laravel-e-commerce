@@ -11,7 +11,7 @@ class StoreProductRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return false;
+        return $this->user() && $this->user()->hasRole('admin');
     }
 
     /**
@@ -22,10 +22,26 @@ class StoreProductRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => 'required|string|max:255',
-            'price' => 'required|numeric|min:0',
-            'category_id' => 'required|exists:categories,id',
+            'name' => ['required', 'string', 'max:255', 'regex:/^[\p{L}\p{N}\s\-_]+$/u'],
+            'price' => ['required', 'numeric', 'min:0', 'max:999999.99'],
+            'category_id' => ['required', 'exists:categories,id'],
+            'in_stock' => ['required', 'boolean'],
+            'stock' => ['required', 'integer', 'min:0', 'max:999999'],
+            'description' => ['nullable', 'string', 'max:1000'],
         ];
     }
-    
+
+    /**
+     * Get custom messages for validator errors.
+     *
+     * @return array
+     */
+    public function messages()
+    {
+        return [
+            'name.regex' => 'The name can only contain letters, numbers, spaces, hyphens and underscores.',
+            'price.max' => 'The price cannot be greater than 999,999.99.',
+            'stock.max' => 'The stock cannot be greater than 999,999.',
+        ];
+    }
 }

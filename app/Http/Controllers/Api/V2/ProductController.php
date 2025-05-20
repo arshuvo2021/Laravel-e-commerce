@@ -8,8 +8,66 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
 use Barryvdh\DomPDF\Facade\Pdf;
 
+/**
+ * @OA\Info(
+ *     version="2.0.0",
+ *     title="E-Commerce API V2",
+ *     description="API documentation for the E-Commerce system",
+ *     @OA\Contact(
+ *         email="support@example.com"
+ *     )
+ * )
+ */
 class ProductController extends Controller
 {
+    /**
+     * @OA\Get(
+     *     path="/api/v2/products",
+     *     summary="Get list of products",
+     *     tags={"Products"},
+     *     @OA\Parameter(
+     *         name="category_id",
+     *         in="query",
+     *         description="Filter by category ID",
+     *         required=false,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Parameter(
+     *         name="min_price",
+     *         in="query",
+     *         description="Filter by minimum price",
+     *         required=false,
+     *         @OA\Schema(type="number")
+     *     ),
+     *     @OA\Parameter(
+     *         name="sort",
+     *         in="query",
+     *         description="Sort by field (price or name)",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Successful operation",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="string", example="success"),
+     *             @OA\Property(property="count", type="integer", example=100),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="array",
+     *                 @OA\Items(
+     *                     @OA\Property(property="id", type="integer"),
+     *                     @OA\Property(property="name", type="string"),
+     *                     @OA\Property(property="price", type="number"),
+     *                     @OA\Property(property="category", type="string"),
+     *                     @OA\Property(property="in_stock", type="boolean"),
+     *                     @OA\Property(property="description", type="string")
+     *                 )
+     *             )
+     *         )
+     *     )
+     * )
+     */
     public function index()
     {
         $query = Product::with('category')->select('id', 'name', 'price', 'in_stock', 'category_id', 'description');
@@ -56,29 +114,29 @@ class ProductController extends Controller
 
     public function exportCsv()
     {
-        $query = Product::with('category')->select('id', 'name', 'price', 'in_stock', 'category_id', 'description');
-        $this->applyFilters($query);
-        $products = $query->get();
-
         $headers = [
             'Content-Type' => 'text/csv',
             'Content-Disposition' => 'attachment; filename="products.csv"',
         ];
 
-        $callback = function () use ($products) {
+        $callback = function () {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, ['ID', 'Name', 'Price', 'Category', 'In Stock', 'Description']);
 
-            foreach ($products as $product) {
-                fputcsv($handle, [
-                    $product->id,
-                    $product->name,
-                    $product->price,
-                    optional($product->category)->name,
-                    $product->in_stock ? 'Yes' : 'No',
-                    $product->description,
-                ]);
-            }
+            Product::with('category')
+                ->select('id', 'name', 'price', 'in_stock', 'category_id', 'description')
+                ->chunk(1000, function ($products) use ($handle) {
+                    foreach ($products as $product) {
+                        fputcsv($handle, [
+                            $product->id,
+                            $product->name,
+                            $product->price,
+                            optional($product->category)->name,
+                            $product->in_stock ? 'Yes' : 'No',
+                            $product->description,
+                        ]);
+                    }
+                });
 
             fclose($handle);
         };
@@ -97,6 +155,47 @@ class ProductController extends Controller
         return $pdf->download('products.pdf');
     }
 
+    /**
+     * @OA\Post(
+     *     path="/api/v2/products",
+     *     summary="Create a new product",
+     *     tags={"Products"},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"name","price","in_stock","stock","category_id"},
+     *             @OA\Property(property="name", type="string", example="Product Name"),
+     *             @OA\Property(property="price", type="number", example=99.99),
+     *             @OA\Property(property="in_stock", type="boolean", example=true),
+     *             @OA\Property(property="stock", type="integer", example=100),
+     *             @OA\Property(property="category_id", type="integer", example=1),
+     *             @OA\Property(property="description", type="string", example="Product description")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=201,
+     *         description="Product created successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="string", example="success"),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="id", type="integer"),
+     *                 @OA\Property(property="name", type="string"),
+     *                 @OA\Property(property="price", type="number"),
+     *                 @OA\Property(property="in_stock", type="boolean"),
+     *                 @OA\Property(property="stock", type="integer"),
+     *                 @OA\Property(property="category_id", type="integer"),
+     *                 @OA\Property(property="description", type="string")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=422,
+     *         description="Validation error"
+     *     )
+     * )
+     */
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -109,7 +208,7 @@ class ProductController extends Controller
         ]);
 
         $product = Product::create($validated);
-
+        
         return response()->json([
             'status' => 'success',
             'data' => $product,
@@ -161,7 +260,7 @@ class ProductController extends Controller
         $product->delete();
 
         return response()->json([
-            'status' => 'success', // Changed for consistency
+            'status' => 'success',
             'message' => 'Product deleted successfully',
         ]);
     }
