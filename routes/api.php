@@ -9,5 +9,11 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 });
 
 Route::prefix('v2')->name('api.v2.')->group(function () {
-    Route::get('products', [ProductV2::class, 'index'])->name('products.index');
+    Route::apiResource('products', ProductV2::class)->only([
+        'index', 'store', 'show', 'update', 'destroy'
+    ]);
+    
+    // Additional export routes
+    Route::get('products/export/csv', [ProductV2::class, 'exportCsv'])->name('products.export.csv');
+    Route::get('products/export/pdf', [ProductV2::class, 'exportPdf'])->name('products.export.pdf');
 });
