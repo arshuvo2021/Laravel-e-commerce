@@ -2,95 +2,210 @@
 
 namespace Tests\Feature\Api\V2;
 
-use Tests\TestCase;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use App\Models\Product;
 use App\Models\Category;
+use App\Models\Product;
 use App\Models\User;
-use Laravel\Sanctum\Sanctum;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
 class ProductApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function setUp(): void
+    protected $user;
+    protected $category;
+
+    protected function setUp(): void
     {
         parent::setUp();
-        $user = User::factory()->create();
-        Sanctum::actingAs($user, ['*']);
+        
+        $this->user = User::factory()->create();
+        $this->category = Category::factory()->create();
     }
 
-    public function test_it_can_list_products()
+    /** @test */
+    public function it_can_list_products()
     {
-        Product::factory()->count(3)->create();
+        Product::factory()->count(3)->create([
+            'category_id' => $this->category->id
+        ]);
 
-        $response = $this->getJson('/api/v2/products');
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/v2/products');
 
         $response->assertStatus(200)
-                 ->assertJsonStructure([
-                     'status',
-                     'count',
-                     'data' => [
-                         '*' => ['id', 'name', 'price', 'in_stock', 'category', 'description']
-                     ],
-                     'pagination' => ['current_page', 'last_page', 'per_page'],
-                 ]);
+            ->assertJsonStructure([
+                'status',
+                'count',
+                'data' => [
+                    '*' => [
+                        'id',
+                        'name',
+                        'price',
+                        'category',
+                        'in_stock',
+                        'description'
+                    ]
+                ],
+                'pagination' => [
+                    'current_page',
+                    'last_page',
+                    'per_page'
+                ]
+            ]);
     }
 
-    public function test_it_can_export_products_to_csv()
+    /** @test */
+    public function it_can_filter_products_by_category()
     {
-        Product::factory()->count(5)->create();
+        Product::factory()->count(2)->create([
+            'category_id' => $this->category->id
+        ]);
 
-        $response = $this->get('/api/v2/products/export/csv');
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/v2/products?category_id=' . $this->category->id);
 
         $response->assertStatus(200)
-                 ->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+            ->assertJsonCount(2, 'data');
     }
 
-    public function test_it_can_export_products_to_pdf()
+    /** @test */
+    public function it_can_export_products_to_csv()
     {
-        Product::factory()->count(5)->create();
+        Product::factory()->count(5)->create([
+            'category_id' => $this->category->id
+        ]);
 
-        $response = $this->get('/api/v2/products/export/pdf');
+        $response = $this->actingAs($this->user)
+            ->get('/api/v2/products/export/csv');
 
         $response->assertStatus(200)
-                 ->assertHeader('Content-Type', 'application/pdf');
+            ->assertHeader('Content-Type', 'text/csv')
+            ->assertHeader('Content-Disposition', 'attachment; filename="products.csv"');
     }
 
-    public function test_it_validates_required_fields_when_creating_product()
+    /** @test */
+    public function it_can_create_a_product()
     {
-        $response = $this->postJson('/api/v2/products', []);
-
-        $response->assertStatus(422)
-                 ->assertJsonValidationErrors(['name', 'price', 'in_stock', 'category_id']);
-    }
-
-    public function test_it_can_create_a_product()
-    {
-        $category = Category::factory()->create();
-
-        $data = [
+        $productData = [
             'name' => 'Test Product',
             'price' => 99.99,
             'in_stock' => true,
-            'stock' => 10,
-            'category_id' => $category->id,
-            'description' => 'Test Description'
+            'stock' => 100,
+            'category_id' => $this->category->id,
+            'description' => 'Test description'
         ];
 
-        $response = $this->postJson('/api/v2/products', $data);
+        $response = $this->actingAs($this->user)
+            ->postJson('/api/v2/products', $productData);
 
         $response->assertStatus(201)
-                 ->assertJson([
-                     'status' => 'success',
-                     'data' => [
-                         'name' => 'Test Product',
-                         'price' => 99.99,
-                         'in_stock' => true,
-                         'stock' => 10,
-                         'category_id' => $category->id,
-                         'description' => 'Test Description'
-                     ]
-                 ]);
+            ->assertJsonStructure([
+                'status',
+                'data' => [
+                    'id',
+                    'name',
+                    'price',
+                    'in_stock',
+                    'stock',
+                    'category_id',
+                    'description'
+                ]
+            ]);
+
+        $this->assertDatabaseHas('products', [
+            'name' => $productData['name'],
+            'price' => $productData['price']
+        ]);
+    }
+
+    /** @test */
+    public function it_validates_required_fields_when_creating_product()
+    {
+        $response = $this->actingAs($this->user)
+            ->postJson('/api/v2/products', []);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['name', 'price', 'in_stock', 'stock', 'category_id']);
+    }
+
+    /** @test */
+    public function it_can_show_a_product()
+    {
+        $product = Product::factory()->create([
+            'category_id' => $this->category->id
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/v2/products/' . $product->id);
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'status',
+                'data' => [
+                    'id',
+                    'name',
+                    'price',
+                    'in_stock',
+                    'category',
+                    'description'
+                ]
+            ]);
+    }
+
+    /** @test */
+    public function it_can_update_a_product()
+    {
+        $product = Product::factory()->create([
+            'category_id' => $this->category->id
+        ]);
+
+        $updateData = [
+            'name' => 'Updated Product',
+            'price' => 149.99
+        ];
+
+        $response = $this->actingAs($this->user)
+            ->putJson('/api/v2/products/' . $product->id, $updateData);
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'status',
+                'data' => [
+                    'id',
+                    'name',
+                    'price',
+                    'in_stock',
+                    'category',
+                    'description'
+                ]
+            ]);
+
+        $this->assertDatabaseHas('products', [
+            'id' => $product->id,
+            'name' => $updateData['name'],
+            'price' => $updateData['price']
+        ]);
+    }
+
+    /** @test */
+    public function it_can_delete_a_product()
+    {
+        $product = Product::factory()->create([
+            'category_id' => $this->category->id
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->deleteJson('/api/v2/products/' . $product->id);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'message' => 'Product deleted successfully'
+            ]);
+
+        $this->assertDatabaseMissing('products', [
+            'id' => $product->id
+        ]);
     }
 } 

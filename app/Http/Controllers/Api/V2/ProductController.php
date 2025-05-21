@@ -117,26 +117,44 @@ class ProductController extends Controller
         $headers = [
             'Content-Type' => 'text/csv',
             'Content-Disposition' => 'attachment; filename="products.csv"',
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0'
         ];
 
         $callback = function () {
             $handle = fopen('php://output', 'w');
+            
+            // Add UTF-8 BOM for proper Excel encoding
+            fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
+            
+            // Write headers
             fputcsv($handle, ['ID', 'Name', 'Price', 'Category', 'In Stock', 'Description']);
 
-            Product::with('category')
-                ->select('id', 'name', 'price', 'in_stock', 'category_id', 'description')
-                ->chunk(1000, function ($products) use ($handle) {
-                    foreach ($products as $product) {
-                        fputcsv($handle, [
-                            $product->id,
-                            $product->name,
-                            $product->price,
-                            optional($product->category)->name,
-                            $product->in_stock ? 'Yes' : 'No',
-                            $product->description,
-                        ]);
-                    }
-                });
+            // Apply any filters from the request
+            $query = Product::with('category')
+                ->select('id', 'name', 'price', 'in_stock', 'category_id', 'description');
+            $this->applyFilters($query);
+
+            // Process in chunks to manage memory
+            $query->chunk(1000, function ($products) use ($handle) {
+                foreach ($products as $product) {
+                    fputcsv($handle, [
+                        $product->id,
+                        $product->name,
+                        number_format($product->price, 2),
+                        optional($product->category)->name,
+                        $product->in_stock ? 'Yes' : 'No',
+                        $product->description,
+                    ]);
+                }
+                
+                // Flush the output buffer to prevent memory issues
+                if (ob_get_level() > 0) {
+                    ob_flush();
+                }
+                flush();
+            });
 
             fclose($handle);
         };
@@ -207,6 +225,11 @@ class ProductController extends Controller
             'description' => 'nullable|string',
         ]);
 
+        // Ensure stock is set to 0 if not provided
+        if (!isset($validated['stock'])) {
+            $validated['stock'] = 0;
+        }
+
         $product = Product::create($validated);
         
         return response()->json([
@@ -244,6 +267,11 @@ class ProductController extends Controller
             'stock' => 'sometimes|integer|min:0',
             'category_id' => 'sometimes|exists:categories,id',
         ]);
+
+        // Update in_stock based on stock value if stock is being updated
+        if (isset($validated['stock'])) {
+            $validated['in_stock'] = $validated['stock'] > 0;
+        }
 
         $product->update($validated);
 
