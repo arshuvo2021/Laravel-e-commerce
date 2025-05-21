@@ -20,12 +20,10 @@ return new class extends Migration
             $table->unsignedBigInteger('category_id'); // must match `categories.id` type
             $table->foreign('category_id')->references('id')->on('categories')->onDelete('cascade');
             $table->timestamps();
-            
             // Add indexes for frequently queried columns
             $table->index('price');
             $table->index('category_id');
         });
-        
     }
 
     /**

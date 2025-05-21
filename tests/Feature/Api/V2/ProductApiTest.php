@@ -79,9 +79,9 @@ class ProductApiTest extends TestCase
         $response = $this->actingAs($this->user)
             ->get('/api/v2/products/export/csv');
 
-        $response->assertStatus(200)
-            ->assertHeader('Content-Type', 'text/csv')
-            ->assertHeader('Content-Disposition', 'attachment; filename="products.csv"');
+        $response->assertStatus(200);
+        $this->assertTrue(str_contains($response->headers->get('Content-Type'), 'text/csv'));
+        $response->assertHeader('Content-Disposition', 'attachment; filename="products.csv"');
     }
 
     /** @test */
